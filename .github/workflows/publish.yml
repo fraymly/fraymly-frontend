@@ -5,6 +5,9 @@ on:
     branches:
       - main # The branch name your are committing the new changes
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
