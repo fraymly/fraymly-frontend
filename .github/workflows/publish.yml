@@ -21,6 +21,9 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
 
       - name: Push
         uses: s0/git-publish-subdir-action@develop
