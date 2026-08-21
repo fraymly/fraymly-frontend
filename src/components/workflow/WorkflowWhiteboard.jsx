@@ -467,13 +467,13 @@ export default function WorkflowWhiteboard({
   }, [nodeById, viewTransform, selectedNodeIds])
 
   const paletteDragStart = (event, type) => {
-    event.dataTransfer.setData('application/x-viralforge-node', type)
+    event.dataTransfer.setData('application/x-fraymly-node', type)
     event.dataTransfer.effectAllowed = 'copy'
   }
 
   const handleCanvasDrop = (event) => {
     event.preventDefault()
-    const type = event.dataTransfer.getData('application/x-viralforge-node')
+    const type = event.dataTransfer.getData('application/x-fraymly-node')
     if (type) {
       addNodeFromDrop(type, event.clientX, event.clientY)
     }

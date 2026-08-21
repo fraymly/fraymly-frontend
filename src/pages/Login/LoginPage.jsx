@@ -16,8 +16,8 @@ export default function LoginPage() {
     formState: { isSubmitting, errors },
   } = useForm({
     defaultValues: {
-      email: 'founder@viralforge.ai',
-      password: 'viralforge',
+      email: 'founder@fraymly.ai',
+      password: 'fraymly',
       rememberMe: true,
     },
   })
@@ -88,7 +88,7 @@ export default function LoginPage() {
                   {...register('email', { required: 'Email is required' })}
                   type="email"
                   className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:border-sky-400"
-                  placeholder="founder@viralforge.ai"
+                  placeholder="founder@fraymly.ai"
                 />
                 {errors.email ? <span className="text-sm text-rose-500">{errors.email.message}</span> : null}
               </label>
