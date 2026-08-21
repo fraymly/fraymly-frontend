@@ -1,6 +1,6 @@
-import { AUTH_TOKEN_KEY } from '../lib/constants'
+import { AUTH_TOKEN_KEY, SERVER_URL } from '../lib/constants'
 
-const API_BASE = '/api'
+const API_BASE = `${SERVER_URL}/api`
 
 const readToken = () => {
   if (typeof window === 'undefined') {
