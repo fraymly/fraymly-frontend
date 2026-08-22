@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import UploadShortsForm from "../../components/forms/UploadShortsForm";
 import Spinner from "../../components/loaders/Spinner";
-import { createProject, listProjects } from "../../api/projects.api";
+import { createProject, listProjects, requestSignedUploadUrl, uploadFileWithProgress } from "../../api/projects.api";
 import { listJobs } from "../../api/jobs.api";
 import { listExports } from "../../api/video.api";
 import useAppStore from "../../store/useAppStore";
@@ -79,6 +79,82 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const setActiveProjectId = useAppStore((state) => state.setActiveProjectId);
   const setActiveJobId = useAppStore((state) => state.setActiveJobId);
+
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState(""); // "", "requesting", "uploading", "saving"
+  const [uploadError, setUploadError] = useState("");
+
+  const handleCreateProject = async (formData, { reset } = {}) => {
+    setUploadError("");
+    const file = formData.get("video");
+    const projectName = formData.get("projectName");
+    const projectDescription = formData.get("projectDescription");
+    const shortCount = formData.get("shortCount");
+    const targetDuration = formData.get("targetDuration");
+    const aspectRatio = formData.get("aspectRatio");
+    const tone = formData.get("tone");
+
+    if (!file) return;
+
+    let storagePath = null;
+    let fileName = null;
+
+    try {
+      setUploadStatus("requesting");
+      setUploadProgress(0);
+
+      // 1. Request signed URL from our backend API
+      const response = await requestSignedUploadUrl(file.name, file.type);
+      
+      if (response && response.uploadData) {
+        const { signedUrl, storagePath: gPath, fileName: gName } = response.uploadData;
+        storagePath = gPath;
+        fileName = gName;
+
+        setUploadStatus("uploading");
+        // 2. Upload directly to GCS bucket via XMLHttpRequest with progress tracking!
+        await uploadFileWithProgress(signedUrl, file, (progress) => {
+          setUploadProgress(progress);
+        });
+      }
+    } catch (err) {
+      console.warn("Signed URL upload failed, falling back to standard backend upload:", err);
+      // Fallback silently to normal upload if GCS credentials are not available locally
+    }
+
+    setUploadStatus("saving");
+
+    try {
+      let payload;
+      if (storagePath) {
+        // Direct GCS upload payload
+        payload = {
+          projectName,
+          projectDescription,
+          shortCount,
+          targetDuration,
+          aspectRatio,
+          tone,
+          storagePath,
+          fileName,
+          originalName: file.name,
+          size: file.size,
+          mimeType: file.type,
+        };
+      } else {
+        // Standard multer file upload payload fallback
+        payload = formData;
+      }
+
+      await createProjectMutation.mutateAsync(payload);
+      setUploadStatus("");
+      reset?.();
+    } catch (err) {
+      console.error("Failed to create project:", err);
+      setUploadError(err.message || "Failed to create project");
+      setUploadStatus("");
+    }
+  };
 
   const projectsQuery = useQuery({
     queryKey: ["projects"],
@@ -156,10 +232,62 @@ export default function DashboardPage() {
             </div>
 
             <div className="pt-5">
-              <UploadShortsForm
-                submitting={createProjectMutation.isPending}
-                onSubmit={async (formData) => createProjectMutation.mutateAsync(formData)}
-              />
+              {uploadStatus ? (
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-6 space-y-4 animate-in fade-in zoom-in duration-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">
+                        {uploadStatus === 'requesting' && '1. Initializing Cloud Storage...'}
+                        {uploadStatus === 'uploading' && `2. Uploading Video (${uploadProgress}%)`}
+                        {uploadStatus === 'saving' && '3. Saving Project Details...'}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {uploadStatus === 'requesting' && 'Securing direct upload connection to Google Cloud Storage...'}
+                        {uploadStatus === 'uploading' && 'Streaming raw media directly to GCS, bypassing gateway limits...'}
+                        {uploadStatus === 'saving' && 'Writing project records and starting metadata pipelines...'}
+                      </p>
+                    </div>
+                    {uploadStatus !== 'saving' && (
+                      <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full">
+                        {uploadProgress}%
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200 relative">
+                    <div 
+                      className="h-full rounded-full bg-slate-950 transition-all duration-300"
+                      style={{ 
+                        width: uploadStatus === 'requesting' 
+                          ? '10%' 
+                          : uploadStatus === 'saving' 
+                            ? '95%' 
+                            : `${uploadProgress}%` 
+                      }} 
+                    />
+                  </div>
+
+                  {uploadError && (
+                    <div className="text-xs text-rose-600 bg-rose-50 border border-rose-100 px-3 py-2 rounded-lg mt-3">
+                      Error: {uploadError}
+                      <button 
+                        onClick={() => {
+                          setUploadStatus('')
+                          setUploadError('')
+                        }}
+                        className="ml-2 underline font-semibold text-rose-800"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <UploadShortsForm
+                  submitting={createProjectMutation.isPending}
+                  onSubmit={handleCreateProject}
+                />
+              )}
             </div>
           </section>
 
