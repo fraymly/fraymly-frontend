@@ -116,10 +116,18 @@ export default function DashboardPage() {
         await uploadFileWithProgress(signedUrl, file, (progress) => {
           setUploadProgress(progress);
         });
+      } else {
+        throw new Error("Backend failed to generate signed upload URL");
       }
     } catch (err) {
-      console.warn("Signed URL upload failed, falling back to standard backend upload:", err);
-      // Fallback silently to normal upload if GCS credentials are not available locally
+      console.warn("Signed URL upload failed:", err);
+      // If the file is larger than 30MB, we CANNOT fall back because Cloud Run will reject it with 413!
+      if (file.size > 30 * 1024 * 1024) {
+        setUploadStatus("");
+        setUploadError(`Upload failed: ${err.message || err}. Since your video is larger than 30MB, it cannot be uploaded via the fallback server due to gateway limits. Please check your GCP Service Account permissions (requires Service Account Token Creator).`);
+        return;
+      }
+      // Fallback silently to normal upload if GCS credentials are not available locally (for small files or local development)
     }
 
     setUploadStatus("saving");
